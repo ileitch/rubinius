@@ -48,6 +48,18 @@ namespace jit {
     BasicBlock* block = BasicBlock::Create(ls_->ctx(), "entry", func);
     builder_.SetInsertPoint(block);
 
+    llvm::TerminatorInst* ti = block->getTerminator();
+
+    if (llvm::isa<llvm::BranchInst>(ti)) {
+      std::vector<llvm::Value *> vec(3);
+      vec[0] = llvm::MDString::get(ls_->ctx(), "branch_weights");
+      vec[1] = llvm::ConstantInt::get(ls_->Int32Ty, 1);
+      vec[2] = llvm::ConstantInt::get(ls_->Int32Ty, 1);
+
+      llvm::MDNode *weights_node = llvm::MDNode::get(ls_->ctx(), vec);
+      ti->setMetadata(LLVMContext::MD_prof, weights_node);
+    }
+
     info_.context().set_function(func);
 
     info_.set_vm(vm);

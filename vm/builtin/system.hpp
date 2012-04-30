@@ -359,6 +359,12 @@ namespace rubinius {
     // Rubinius.primitive :vm_set_module_name
     static Object* vm_set_module_name(STATE, Module* mod, Object* name, Object* under);
 
+    // Rubinius.primitive :vm_hotpath_hint_true
+    static Object* vm_hotpath_hint_true(STATE, StaticScope* scope, CallFrame* calling_environment);
+
+    // Rubinius.primitive :vm_hotpath_hint_false
+    static Object* vm_hotpath_hint_false(STATE, StaticScope* scope, CallFrame* calling_environment);
+
   public:   /* Type info */
 
     class Info : public TypeInfo {

@@ -315,10 +315,19 @@ module Rubinius
         @condition.bytecode(g)
         g.gif else_label
 
+        g.push_scope
+        g.invoke_primitive :vm_hotpath_hint_true, 1
+        g.pop
+
         @body.bytecode(g)
         g.goto done
 
         else_label.set!
+
+        g.push_scope
+        g.invoke_primitive :vm_hotpath_hint_false, 1
+        g.pop
+
         @else.bytecode(g)
 
         # Use line 0 to indicate "compiler generated code"

@@ -1660,4 +1660,14 @@ namespace rubinius {
 
     return cNil;
   }
+
+	Object* System::vm_hotpath_hint_true(STATE, StaticScope* scope, CallFrame* calling_environment) {
+		printf("vm_hotpath_hint_true\n");
+		return cNil;
+	}
+
+	Object* System::vm_hotpath_hint_false(STATE, StaticScope* scope, CallFrame* calling_environment) {
+		printf("vm_hotpath_hint_false\n");
+		return cNil;
+	}
 }
