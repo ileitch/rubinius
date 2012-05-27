@@ -272,4 +272,26 @@ describe "CApiModule" do
       @m.rb_class2name(CApiModuleSpecs::M).should == "CApiModuleSpecs::M"
     end
   end
+
+  ruby_version_is ""..."1.9" do
+    describe "rb_frame_last_func" do
+      it "returns the name of the function being called" do
+        @m.rb_frame_last_func.should == :rb_frame_last_func
+      end
+    end
+
+    describe "rb_frame_this_func" do
+      it "returns the name of the function being called" do
+        @m.rb_frame_this_func.should == :rb_frame_this_func
+      end
+    end
+  end
+
+  ruby_version_is "1.9" do
+    describe "rb_frame_this_func" do
+      it "returns the name of the function being called" do
+        @m.rb_frame_this_func.should == :rb_frame_this_func
+      end
+    end
+  end
 end
