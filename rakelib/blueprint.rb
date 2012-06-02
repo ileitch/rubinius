@@ -148,6 +148,13 @@ Daedalus.blueprint do |i|
     g.shared_library "enc/trans/utf_16_32"
   end
 
+  runtime = i.library_group "vm/runtime" do |g|
+    g.cflags = ["-I../../", "-I../../vm", "-I../../vendor/libtommath", "-I../../vendor/libgdtoa", "-g -ggdb3 -Werror -02"]
+    g.shared_library "kernel19" do |l|
+      l.source_files "kernel19.cpp"
+    end
+  end
+
   gdtoa = i.external_lib "vendor/libgdtoa" do |l|
     l.cflags = ["-Ivendor/libgdtoa"]
     l.objects = [l.file("libgdtoa.a")]
@@ -242,6 +249,7 @@ Daedalus.blueprint do |i|
   gcc.add_library ffi
   gcc.add_library gdtoa
   gcc.add_library ltm
+  gcc.add_library runtime
 
   Rubinius::BUILD_CONFIG[:include_dirs].each do |path|
     gcc.cflags << "-I#{path} " if File.exists? path
@@ -268,6 +276,7 @@ Daedalus.blueprint do |i|
   files << gdtoa
   files << oniguruma
   files << ltm
+  files << runtime
 
   cli = files.dup
   cli << i.source_file("vm/drivers/cli.cpp")

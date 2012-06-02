@@ -7,6 +7,7 @@
 
 #include "vm/exception.hpp"
 
+#include "builtin/kernel.hpp"
 #include "builtin/array.hpp"
 #include "builtin/class.hpp"
 #include "builtin/exception.hpp"
@@ -660,20 +661,25 @@ namespace rubinius {
     version_ = as<Fixnum>(G(rubinius)->get_const(
           state, state->symbol("RUBY_LIB_VERSION")))->to_native();
 
-    // Load alpha
-    run_file(root + "/alpha.rbc");
 
-    while(!stream.eof()) {
-      std::string line;
+    Kernel* kernel = new Kernel(root + "/../../vm/runtime/kernel19.bundle");
+    kernel->execute(state);
+    delete kernel;
 
-      stream >> line;
-      stream.get(); // eat newline
+    // // Load alpha
+    // run_file(root + "/alpha.rbc");
 
-      // skip empty lines
-      if(line.empty()) continue;
+    // while(!stream.eof()) {
+    //   std::string line;
 
-      load_directory(root + "/" + line);
-    }
+    //   stream >> line;
+    //   stream.get(); // eat newline
+
+    //   // skip empty lines
+    //   if(line.empty()) continue;
+
+    //   load_directory(root + "/" + line);
+    // }
   }
 
   void Environment::load_tool() {

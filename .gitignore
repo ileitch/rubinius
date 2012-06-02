@@ -38,7 +38,7 @@ cscope.files
 cscope.out
 configure.log
 rakelib/ryan.rake
-runtime
+/runtime
 scratch
 stamp-h1
 stats
