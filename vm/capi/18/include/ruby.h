@@ -1112,7 +1112,7 @@ VALUE rb_uint2big(unsigned long number);
                        const VALUE* v_args, VALUE block);
 
   /** Return name of the function being called */
-  ID      rb_frame_last_func();
+  ID rb_frame_last_func();
 
   /** Return name of the current Ruby method */
   ID rb_frame_this_func();

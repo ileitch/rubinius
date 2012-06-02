@@ -146,18 +146,6 @@ static VALUE module_specs_rbclass2name(VALUE self, VALUE klass) {
 }
 #endif
 
-#ifdef HAVE_RB_FRAME_LAST_FUNC
-static VALUE module_spec_rb_frame_last_func(void) {
-  return ID2SYM(rb_frame_last_func());
-}
-#endif
-
-#ifdef HAVE_RB_FRAME_THIS_FUNC
-static VALUE module_spec_rb_frame_this_func(void) {
-  return ID2SYM(rb_frame_this_func());
-}
-#endif
-
 void Init_module_spec() {
   VALUE cls;
 
@@ -246,14 +234,6 @@ void Init_module_spec() {
 
 #ifdef HAVE_RB_CLASS2NAME
   rb_define_method(cls, "rb_class2name", module_specs_rbclass2name, 1);
-#endif
-
-#ifdef HAVE_RB_FRAME_LAST_FUNC
-  rb_define_method(cls, "rb_frame_last_func", module_spec_rb_frame_last_func, -1);
-#endif
-
-#ifdef HAVE_RB_FRAME_THIS_FUNC
-  rb_define_method(cls, "rb_frame_this_func", module_spec_rb_frame_this_func, -1);
 #endif
 }
 
