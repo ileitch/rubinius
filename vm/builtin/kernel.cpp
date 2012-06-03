@@ -45,7 +45,7 @@ namespace rubinius {
 
     for (int i = 0; i < 1024; i++) {
       if (cmethods[i]) { 
-        TypedRoot<CompiledMethod*> cm(state, cmethods[i]);
+        TypedRoot<CompiledMethod*> cm(state, as<CompiledMethod>(cmethods[i]));
 
         state->thread_state()->clear(); // Required for each time?
 

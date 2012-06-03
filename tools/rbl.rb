@@ -5,12 +5,31 @@ File.readlines(RUNTIME + '/index').map do |dir|
 	RBC.push(*File.readlines(RUNTIME + "/#{dir.chomp}/load_order.txt").map { |line| "#{dir.chomp}/#{line.chomp}" })
 end
 
+puts RBC
+
+class IncrementalVariable
+  def initialize
+    @name = 'v'
+    @incr = -1
+  end
+
+  def next
+    @incr += 1
+    "#{@name}#{@incr}"
+  end
+end
+
 class Generator
-	def initialize(rbc)
+	def initialize(rbc, cpp, var)
+    @cpp = cpp
     @rbc = File.open(rbc, 'r')
-    # Skip magic, signature and version.
-    3.times { @rbc.readline }
+    3.times { @rbc.readline } # Skip magic, signature and version.
+    @var = var
 	end
+
+  def close
+    @rbc.close
+  end
 
   def generate
     line = @rbc.readline
@@ -53,9 +72,14 @@ class Generator
   end
 
   def generate_iseq
-    count = @rbc.readline.to_i
-    args = count.times.map { @rbc.readline.chomp }
-    "get_iseq(state, #{count}, #{args.join(', ')})"    
+    count = @rbc.readline.chomp.to_i
+    opcodes = @var.next
+    @cpp.write("const char* #{opcodes}[] = {")
+    @cpp.write(count.times.map { "\"#{@rbc.readline.chomp}\"" }.join(', '))
+    @cpp.puts("};")
+    iseq = @var.next
+    @cpp.puts("InstructionSequence* #{iseq} = get_iseq(state, #{count}, #{opcodes});")
+    iseq
   end
 
   def generate_int
@@ -64,7 +88,7 @@ class Generator
   end
 
   def generate_tuple
-    count = @rbc.readline.to_i
+    count = @rbc.readline.chomp.to_i
     if count == 0
       "get_tuple(state, #{count})"
     else
@@ -74,7 +98,7 @@ class Generator
   end
 
   def generate_symbol
-    count = @rbc.readline.to_i
+    count = @rbc.readline.chomp.to_i
     data = escape(@rbc.read(count))
     @rbc.read(1) # newline
     "get_symbol(state, #{data})"
@@ -82,24 +106,29 @@ class Generator
 
   def generate_string
     enc = generate
-    count = @rbc.readline.to_i
+    count = @rbc.readline.chomp.to_i
     data = escape(@rbc.read(count))
-    @i ||= 0
-    @i += 1
-    p [count, @i, data]
     @rbc.read(1) # newline
     "get_string(state, #{count}, #{enc}, #{data})"
   end
 
   def generate_encoding
-    count = @rbc.readline.to_i
-    data = @rbc.readline.chomp
-    "get_encoding(state, #{count}, #{data.inspect})"
+    count = @rbc.readline.chomp.to_i
+    data = @rbc.read(count)
+    @rbc.read(1) # newline
+    if count == 0
+      'cNil'
+    else
+      "get_encoding(state, #{count}, #{data.inspect})"
+    end
   end
 
+  FLOAT_EXP_OFFSET = 58
   def generate_float
-    data = @rbc.readline.chomp
-    "get_float(state, #{data.inspect})"
+    data = @rbc.readline.chomp.to_s
+    float = data[0..FLOAT_EXP_OFFSET-1]
+    exp = data[FLOAT_EXP_OFFSET..-1]
+    "get_float(state, #{float.inspect}, #{exp.inspect})"
   end
 
   def escape(str)
@@ -127,8 +156,6 @@ File.open(Dir.pwd + '/vm/runtime/kernel19.cpp', 'w') do |cpp|
 #include "builtin/symbol.hpp"
 #include "builtin/tuple.hpp"
 
-#define FLOAT_EXP_OFFSET 58
-
 namespace rubinius {
 
 Symbol* get_symbol(STATE, const char* data) {
@@ -136,20 +163,16 @@ Symbol* get_symbol(STATE, const char* data) {
   return sym;
 }
 
-InstructionSequence* get_iseq(STATE, size_t count, ...) {
+InstructionSequence* get_iseq(STATE, size_t count, const char** opcodes) {
   InstructionSequence* iseq = InstructionSequence::create(state, count);
   Tuple* ops = iseq->opcodes();
 
-  va_list opcodes;
-  va_start(opcodes, count);
-
   long op = 0;
-  for(size_t i = 0; i < count; i++) {
-    op = va_arg(opcodes, long);
+  for(size_t i = 0; i < count; i++) {  
+    op = strtol(opcodes[i], NULL, 10);
     ops->put(state, i, Fixnum::from(op));
   }
-          
-  va_end(opcodes);
+
   iseq->post_marshal(state);
   return iseq;
 }
@@ -181,21 +204,16 @@ String* get_string(STATE, size_t count, Object* raw_enc, const char* data) {
 }
 
 Object* get_encoding(STATE, size_t count, const char* data) {
-  if(count > 0) {
-    Encoding* enc = Encoding::find(state, data);
-    return enc;
-  } else {
-    return cNil;
-  }
+  return Encoding* enc = Encoding::find(state, data);
 }
 
-Float* get_float(STATE, const char* data) {
+Float* get_float(STATE, const char* data, const char* exp) {
   if(data[0] == ' ') {
     double x;
     long   e;
 
     x = ::ruby_strtod(data, NULL);
-    e = strtol(data+FLOAT_EXP_OFFSET, NULL, 10);
+    e = strtol(exp, NULL, 10);
 
     // This is necessary because exp2(1024) yields inf
     if(e == 1024) {
@@ -253,10 +271,12 @@ extern "C" void kernel_cmethods(STATE, CompiledMethod** cmethods) {
   int i = 0;
   EOS
 
+  var = IncrementalVariable.new
   RBC.each do |rbc|
-    cpp.write("cmethods[i++] = ")
-    cpp.write(Generator.new(RUNTIME + "/#{rbc}").generate)
-    cpp.puts(";")
+    g = Generator.new(RUNTIME + "/#{rbc}", cpp, var)
+    line = g.generate
+    cpp.puts("cmethods[i++] = #{line};")
+    g.close
   end
 
   cpp.puts <<-EOS

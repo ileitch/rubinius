@@ -669,6 +669,11 @@ namespace rubinius {
     // // Load alpha
     // run_file(root + "/alpha.rbc");
 
+    // load_directory(root + "/bootstrap");
+    // load_directory(root + "/platform");
+    // load_directory(root + "/common");
+    // load_directory(root + "/delta");
+
     // while(!stream.eof()) {
     //   std::string line;
 

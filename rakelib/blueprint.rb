@@ -149,7 +149,7 @@ Daedalus.blueprint do |i|
   end
 
   runtime = i.library_group "vm/runtime" do |g|
-    g.cflags = ["-I../../", "-I../../vm", "-I../../vendor/libtommath", "-I../../vendor/libgdtoa", "-g -ggdb3 -Werror -02"]
+    g.cflags = ["-I../../", "-I../../vm", "-I../../vendor/libtommath", "-I../../vendor/libgdtoa", "-g -ggdb3 -Werror -O2 -pipe -Wall -fno-omit-frame-pointer -Wno-unused-function"]
     g.shared_library "kernel19" do |l|
       l.source_files "kernel19.cpp"
     end
