@@ -1,58 +1,13 @@
+require "stringio"
+
 RUNTIME = "#{Dir.pwd}/runtime/19"
 RBC = ['alpha.rbc']
 
 File.readlines(RUNTIME + '/index').map do |dir|
-  # next unless ['bootstrap', 'platform', 'common'].include? dir.chomp
 	RBC.push(*File.readlines(RUNTIME + "/#{dir.chomp}/load_order.txt").map { |line| "#{dir.chomp}/#{line.chomp}" })
 end
 
 puts RBC
-
-class Variable
-  attr_accessor :defined
-
-  def initialize(type, name, defined)
-    @type = type
-    @name = name
-    @defined = defined
-  end
-
-  def for_assignment
-    if @defined
-      name
-    else
-      "#{@type} #{@name}"
-    end
-  end
-
-  def name
-    @name
-  end
-end
-
-class Variables
-  def initialize
-    @defined = {}
-    @used = {}
-  end
-
-  def next(type, prefix)
-    @used[prefix] ||= 0
-    @used[prefix] += 1
-    var = "#{prefix}#{@used[prefix]}"
-
-    if @defined[var]
-      @defined[var].defined = true
-      @defined[var]
-    else
-      Variable.new(type, var, false)
-    end
-  end
-
-  def reset_used
-    @used = {}
-  end
-end
 
 class IncrementalVariable
   def initialize
@@ -64,16 +19,41 @@ class IncrementalVariable
     @incr += 1
     "#{@name}#{@incr}"
   end
+
+  def reset
+    @incr = -1
+  end
+end
+
+class StaticStrings
+  attr_reader :strings
+
+  def initialize(var)
+    @var = var
+    @strings = []
+    @map = {}
+    @i = -1
+  end
+
+  def index(str)
+    if !@map[str]
+      @i += 1
+      @map[str] = @i
+      @strings[@i] = str
+    end
+
+    "#{@var}[#{@map[str]}]"
+  end
 end
 
 class Generator
-	def initialize(rbc, cpp, var, vars)
+	def initialize(rbc, cpp, var, strings)
     @file = rbc
     @cpp = cpp
     @rbc = File.open(rbc, 'r')
     3.times { @rbc.readline } # Skip magic, signature and version.
     @var = var
-    @vars = vars
+    @strings = strings
 	end
 
   def close
@@ -121,7 +101,6 @@ class Generator
     @cpp.puts "// #{@file}"
     @cpp.puts "CompiledMethod* get_cmethod_#{i}(STATE) {"
     lines.each { |l| @cpp.write(l) }
-    cm = @vars.next('CompiledMethod*', 'cm')
     @cpp.puts("  return get_cmethod(state, #{args});")
     @cpp.puts "};"
     "get_cmethod_#{i}(state)"
@@ -133,9 +112,9 @@ class Generator
     lines << "  const long #{opcodes}[#{count}] = {"
     lines << count.times.map { "#{@rbc.readline.chomp}L" }.join(', ')
     lines << "};\n"
-    iseq = @vars.next('InstructionSequence*', 'is')
-    lines << "  #{iseq.for_assignment} = get_iseq(state, #{count}, #{opcodes});\n"
-    iseq.name
+    iseq = @var.next
+    lines << "  InstructionSequence* #{iseq} = get_iseq(state, #{count}, #{opcodes});\n"
+    iseq
   end
 
   def generate_int(lines)
@@ -145,33 +124,35 @@ class Generator
 
   def generate_tuple(lines)
     count = @rbc.readline.chomp.to_i
-    t = @vars.next('Tuple*', 't')
+    t = @var.next
     if count == 0
-      lines << "  #{t.for_assignment} = EMPTY_TUPLE(state);\n"
+      lines << "  Tuple* #{t} = EMPTY_TUPLE(state);\n"
     else
       tvs = @var.next
       args = count.times.map { generate }
       lines << "  Object* #{tvs}[#{count}] = {"
       lines << args.join(', ')
       lines << "};\n"
-      lines << "  #{t.for_assignment} = get_tuple(state, #{count}, #{tvs});\n"
+      lines << "  Tuple* #{t} = get_tuple(state, #{count}, #{tvs});\n"
     end
-    t.name
+    t
   end
 
   def generate_symbol(lines)
     count = @rbc.readline.chomp.to_i
     data = escape(@rbc.read(count))
+    str_index = @strings.index(data)
     @rbc.read(1) # newline
-    "get_symbol(state, #{data})"
+    "GET_SYMBOL(state, #{str_index})"
   end
 
   def generate_string(lines)
     enc = generate
     count = @rbc.readline.chomp.to_i
     data = escape(@rbc.read(count))
+    str_index = @strings.index(data)
     @rbc.read(1) # newline
-    "get_string(state, #{count}, #{enc}, #{data})"
+    "get_string(state, #{count}, #{enc}, #{str_index})"
   end
 
   def generate_encoding(lines)
@@ -207,9 +188,9 @@ File.open(Dir.pwd + '/vm/runtime/kernel19.hpp', 'w') do |hpp|
 #define EMPTY_TUPLE(state) Tuple::create(state, 0)
 #define GET_ENCODING(state, data) Encoding::find(state, data)
 #define GET_INT(state, data) Bignum::from_string(state, data, 16)
+#define GET_SYMBOL(state, data) state->symbol(data)
 
 namespace rubinius {
-  Symbol* get_symbol(STATE, const char* data);
   InstructionSequence* get_iseq(STATE, size_t count, const long* opcodes);
   Tuple* get_tuple(STATE, size_t count, Object** values);
   String* get_string(STATE, size_t count, Object* raw_enc, const char* data);
@@ -242,11 +223,6 @@ File.open(Dir.pwd + '/vm/runtime/kernel19.cpp', 'w') do |cpp|
 #include "kernel19.hpp"
 
 namespace rubinius {
-
-Symbol* get_symbol(STATE, const char* data) {
-  Symbol* sym = state->symbol(data);  
-  return sym;
-}
 
 InstructionSequence* get_iseq(STATE, size_t count, const long* opcodes) {
   InstructionSequence* iseq = InstructionSequence::create(state, count);
@@ -336,20 +312,27 @@ CompiledMethod* get_cmethod(STATE, Object* metadata, Object* primitive, Symbol* 
 
   return cm;
 }
+
 EOS
 
-
 toplevel_cmethods = []
+kernel_strings = StaticStrings.new("kernel_strings")
 var = IncrementalVariable.new
-vars = Variables.new
 $i = 0
+
+lines = StringIO.new
+
 RBC.each do |rbc|
-  g = Generator.new(RUNTIME + "/#{rbc}", cpp, var, vars)
+  g = Generator.new(RUNTIME + "/#{rbc}", lines, var, kernel_strings)
   toplevel_cmethods << g.generate
   g.close
-  vars.reset_used
+  var.reset
 end
 
+cpp.puts("static const char* kernel_strings[] = {#{kernel_strings.strings.join(', ')}};\n")
+
+lines.seek 0
+cpp.write(lines.read)
 
 cpp.write <<-EOS
 extern "C" void kernel_cmethods(STATE, CompiledMethod** cmethods) {
