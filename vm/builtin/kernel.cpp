@@ -5,7 +5,7 @@
 #include "objectmemory.hpp"
 #include "arguments.hpp"
 #include "kernel.hpp"
-#include "staticscope.hpp"
+#include "constantscope.hpp"
 
 #include "builtin/array.hpp"
 #include "builtin/class.hpp"
@@ -44,7 +44,7 @@ namespace rubinius {
     load(state, cmethods);
 
     for (int i = 0; i < 1024; i++) {
-      if (cmethods[i]) { 
+      if (cmethods[i]) {
         printf("%d\n", i);
         TypedRoot<CompiledMethod*> cm(state, as<CompiledMethod>(cmethods[i]));
 
@@ -52,7 +52,7 @@ namespace rubinius {
 
         Arguments args(state->symbol("script"), G(main), 0, 0);
 
-        cm.get()->scope(state, StaticScope::create(state));
+        cm.get()->scope(state, ConstantScope::create(state));
         cm.get()->scope()->module(state, G(object));
 
         cm->execute(state, NULL, cm.get(), G(object), args);
@@ -81,7 +81,7 @@ namespace rubinius {
         }
       } else {
         break;
-      }      
+      }
     }
   }
 }
